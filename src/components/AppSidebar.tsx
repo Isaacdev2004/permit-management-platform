@@ -9,6 +9,7 @@ import {
   Calendar,
   Filter,
   ChevronDown,
+  Mail,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -30,6 +31,7 @@ const navigationItems = [
   { title: "Exports", url: "/exports", icon: Download },
   { title: "Clients", url: "/clients", icon: Users },
   { title: "Automations", url: "/automations", icon: Zap },
+  { title: "Email Reports", url: "/email-subscriptions", icon: Mail },
 ];
 
 export function AppSidebar() {

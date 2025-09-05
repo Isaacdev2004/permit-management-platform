@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, Download, FileText } from "lucide-react";
+import { Search, Filter, Download, FileText, RefreshCw } from "lucide-react";
 import { downloadCsv } from "@/lib/utils";
+import { apiClient } from "@/lib/api";
+import { toast } from "sonner";
 
 const workClassFilters = [
   "Repair", "New", "Remodel", "Change Out", "Addition and Remodel", 
@@ -22,52 +24,52 @@ const workClassFilters = [
   "Plumbing Service Line", "Freestanding"
 ];
 
-const mockPermits = [
-  {
-    id: "2025-085597 EP",
-    type: "Electrical Permit",
-    workClass: "Repair",
-    issued: "12/07/2025",
-    applied: "10/07/2025",
-    zip: "78752",
-    district: "4",
-    sqft: "–", 
-    location: "7615 CARVER AVE, AUSTIN, TX, 78752",
-    contractor: "TexX Electric, LLC",
-    validation: "$6,000"
-  },
-  {
-    id: "2024-101390 EP",
-    type: "Electrical Permit", 
-    workClass: "New",
-    issued: "12/07/2025",
-    applied: "21/10/2024",
-    zip: "78704",
-    district: "3",
-    sqft: "468",
-    location: "1209 FIELDCREST DR, AUSTIN, TX, 78704",
-    contractor: "LED ES Electric",
-    validation: "–"
-  },
-  {
-    id: "2025-057123 MP",
-    type: "Mechanical Permit",
-    workClass: "Remodel", 
-    issued: "12/07/2025",
-    applied: "14/02/2025",
-    zip: "78744",
-    district: "2",
-    sqft: "89289",
-    location: "4500 S PLEASANT VALLEY RD BLDG 3 UNIT 310, AUSTIN, TX, 78744",
-    contractor: "2R Mechanical",
-    validation: "–"
-  }
-];
+interface Permit {
+  id: number;
+  permit_id: string;
+  city: string;
+  permit_type: string;
+  work_class: string;
+  issued_date: string;
+  applied_date: string;
+  zip_code: string;
+  district: string;
+  sqft: string;
+  location: string;
+  contractor: string;
+  validation_amount: string;
+  scraped_at: string;
+}
 
 export default function Permits() {
+  const [permits, setPermits] = useState<Permit[]>([]);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showResults, setShowResults] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [scraping, setScraping] = useState(false);
+
+  // Load permits on component mount
+  useEffect(() => {
+    loadPermits();
+  }, []);
+
+  const loadPermits = async () => {
+    setLoading(true);
+    try {
+      const response = await apiClient.getPermits({
+        workClass: selectedFilters.length > 0 ? selectedFilters[0] : undefined,
+        search: searchTerm || undefined,
+        limit: 100
+      });
+      setPermits(response.data || []);
+    } catch (error) {
+      console.error('Error loading permits:', error);
+      toast.error('Failed to load permits');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleFilter = (filter: string) => {
     setSelectedFilters(prev => 
@@ -77,40 +79,44 @@ export default function Permits() {
     );
   };
 
-  const filteredPermits = mockPermits.filter(permit => {
-    const matchesSearch = permit.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         permit.contractor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         permit.id.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFilter = selectedFilters.length === 0 || 
-                         selectedFilters.includes(permit.workClass);
-    
-    return matchesSearch && matchesFilter;
-  });
+  // Reload permits when filters change
+  useEffect(() => {
+    loadPermits();
+  }, [selectedFilters, searchTerm]);
 
   const handlePreviewCount = () => {
-    alert(`${filteredPermits.length} permits match your filters`);
+    toast.info(`${permits.length} permits match your filters`);
   };
 
   const handleViewResults = () => {
     setShowResults(true);
   };
 
-  const handleExportCsv = () => {
-    const rows = filteredPermits.map(p => ({
-      id: p.id,
-      type: p.type,
-      workClass: p.workClass,
-      issued: p.issued,
-      applied: p.applied,
-      zip: p.zip,
-      district: p.district,
-      sqft: p.sqft,
-      location: p.location,
-      contractor: p.contractor,
-      validation: p.validation,
-    }));
-    downloadCsv(rows, `permits_${Date.now()}.csv`);
+  const handleScrapePermits = async () => {
+    setScraping(true);
+    try {
+      const response = await apiClient.scrapePermits('Austin, TX');
+      toast.success(`Scraped ${response.data.length} new permits from Austin, TX`);
+      loadPermits(); // Reload the permits list
+    } catch (error) {
+      console.error('Error scraping permits:', error);
+      toast.error('Failed to scrape permits');
+    } finally {
+      setScraping(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      await apiClient.exportPermits({
+        workClass: selectedFilters.length > 0 ? selectedFilters[0] : undefined,
+        search: searchTerm || undefined
+      });
+      toast.success('Permits exported successfully');
+    } catch (error) {
+      console.error('Error exporting permits:', error);
+      toast.error('Failed to export permits');
+    }
   };
 
   return (
@@ -162,6 +168,15 @@ export default function Permits() {
             <Button size="sm" className="bg-primary hover:bg-primary-hover text-primary-foreground" onClick={handleViewResults}>
               View Results
             </Button>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleScrapePermits}
+              disabled={scraping}
+            >
+              <RefreshCw className={`w-4 h-4 mr-1 ${scraping ? 'animate-spin' : ''}`} />
+              {scraping ? 'Scraping...' : 'Scrape Austin'}
+            </Button>
             <Button variant="outline" size="sm">
               Save Preset
             </Button>
@@ -189,27 +204,44 @@ export default function Permits() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPermits.map((permit) => (
-                  <TableRow key={permit.id} className="border-border hover:bg-muted/30">
-                    <TableCell className="font-medium text-primary">{permit.id}</TableCell>
-                    <TableCell className="text-foreground">{permit.type}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-                        {permit.workClass}
-                      </Badge>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center py-8">
+                      <div className="flex items-center justify-center">
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Loading permits...
+                      </div>
                     </TableCell>
-                    <TableCell className="text-foreground">{permit.issued}</TableCell>
-                    <TableCell className="text-foreground">{permit.applied}</TableCell>
-                    <TableCell className="text-foreground">{permit.zip}</TableCell>
-                    <TableCell className="text-foreground">{permit.district}</TableCell>
-                    <TableCell className="text-foreground">{permit.sqft}</TableCell>
-                    <TableCell className="text-sm text-foreground max-w-xs truncate">
-                      {permit.location}
-                    </TableCell>
-                    <TableCell className="text-foreground">{permit.contractor}</TableCell>
-                    <TableCell className="text-foreground">{permit.validation}</TableCell>
                   </TableRow>
-                ))}
+                ) : permits.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                      No permits found. Try scraping Austin, TX data first.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  permits.map((permit) => (
+                    <TableRow key={permit.id} className="border-border hover:bg-muted/30">
+                      <TableCell className="font-medium text-primary">{permit.permit_id}</TableCell>
+                      <TableCell className="text-foreground">{permit.permit_type}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
+                          {permit.work_class}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-foreground">{permit.issued_date}</TableCell>
+                      <TableCell className="text-foreground">{permit.applied_date}</TableCell>
+                      <TableCell className="text-foreground">{permit.zip_code}</TableCell>
+                      <TableCell className="text-foreground">{permit.district}</TableCell>
+                      <TableCell className="text-foreground">{permit.sqft}</TableCell>
+                      <TableCell className="text-sm text-foreground max-w-xs truncate">
+                        {permit.location}
+                      </TableCell>
+                      <TableCell className="text-foreground">{permit.contractor}</TableCell>
+                      <TableCell className="text-foreground">{permit.validation_amount}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

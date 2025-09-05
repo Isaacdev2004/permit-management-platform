@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,41 +19,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Search, Plus, Edit, Trash2, Eye } from "lucide-react";
+import { apiClient } from "@/lib/api";
+import { toast } from "sonner";
 
 interface Client {
-  id: string;
+  id: number;
   company: string;
   email: string;
   industry: string;
   automations: number;
+  created_at: string;
+  updated_at: string;
 }
 
-const mockClients: Client[] = [
-  {
-    id: "1",
-    company: "aaa",
-    email: "abhishek20040916@gmail.com",
-    industry: "qq",
-    automations: 1
-  },
-  {
-    id: "2", 
-    company: "BuildWell Commercial",
-    email: "bids@buildwell.com",
-    industry: "Commercial Construction",
-    automations: 2
-  },
-  {
-    id: "3",
-    company: "Reliable Renovators", 
-    email: "contact@reliablerenovators.com",
-    industry: "Residential Construction",
-    automations: 1
-  }
-];
-
 export default function Clients() {
-  const [clients, setClients] = useState<Client[]>(mockClients);
+  const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -63,6 +43,25 @@ export default function Clients() {
     email: "",
     industry: ""
   });
+  const [loading, setLoading] = useState(false);
+
+  // Load clients on component mount
+  useEffect(() => {
+    loadClients();
+  }, []);
+
+  const loadClients = async () => {
+    setLoading(true);
+    try {
+      const response = await apiClient.getClients();
+      setClients(response.data || []);
+    } catch (error) {
+      console.error('Error loading clients:', error);
+      toast.error('Failed to load clients');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredClients = clients.filter(client =>
     client.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -85,28 +84,34 @@ export default function Clients() {
     setIsViewDialogOpen(true);
   };
 
-  const handleSave = () => {
-    if (editingClient) {
-      setClients(prev => prev.map(client => 
-        client.id === editingClient.id 
-          ? { ...client, ...formData }
-          : client
-      ));
-    } else {
-      const newClient: Client = {
-        id: Date.now().toString(),
-        ...formData,
-        automations: 0
-      };
-      setClients(prev => [...prev, newClient]);
+  const handleSave = async () => {
+    try {
+      if (editingClient) {
+        await apiClient.updateClient(editingClient.id.toString(), formData);
+        toast.success('Client updated successfully');
+      } else {
+        await apiClient.createClient(formData);
+        toast.success('Client created successfully');
+      }
+      loadClients(); // Reload clients
+      setIsEditDialogOpen(false);
+      setEditingClient(null);
+      setFormData({ company: "", email: "", industry: "" });
+    } catch (error) {
+      console.error('Error saving client:', error);
+      toast.error('Failed to save client');
     }
-    setIsEditDialogOpen(false);
-    setEditingClient(null);
-    setFormData({ company: "", email: "", industry: "" });
   };
 
-  const handleDelete = (clientId: string) => {
-    setClients(prev => prev.filter(client => client.id !== clientId));
+  const handleDelete = async (clientId: number) => {
+    try {
+      await apiClient.deleteClient(clientId.toString());
+      toast.success('Client deleted successfully');
+      loadClients(); // Reload clients
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      toast.error('Failed to delete client');
+    }
   };
 
   return (
@@ -232,7 +237,13 @@ export default function Clients() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredClients.length === 0 ? (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8">
+                      Loading clients...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredClients.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       No clients found

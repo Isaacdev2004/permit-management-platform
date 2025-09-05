@@ -12,6 +12,7 @@ import Clients from "./pages/Clients";
 import Exports from "./pages/Exports";
 import Presets from "./pages/Presets";
 import Automations from "./pages/Automations";
+import EmailSubscriptions from "./pages/EmailSubscriptions";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 
@@ -59,6 +60,7 @@ const App = () => {
                             <Route path="/exports" element={<Exports />} />
                             <Route path="/presets" element={<Presets />} />
                             <Route path="/automations" element={<Automations />} />
+                            <Route path="/email-subscriptions" element={<EmailSubscriptions />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
                         </div>
