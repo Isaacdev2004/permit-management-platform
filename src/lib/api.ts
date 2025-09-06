@@ -1,4 +1,14 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const resolvedBase = ((): string => {
+	const envBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
+	if (envBase && envBase.trim()) return envBase;
+	const host = typeof window !== 'undefined' ? window.location.hostname : '';
+	const isProd = host && !host.includes('localhost') && !host.startsWith('127.');
+	return isProd
+		? 'https://permit-management-backend-2.onrender.com/api'
+		: 'http://localhost:3001';
+})();
+
+const API_BASE_URL = resolvedBase;
 
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
