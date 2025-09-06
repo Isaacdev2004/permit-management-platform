@@ -9,10 +9,9 @@
     }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+    { "src": "/assets/(.*)", "dest": "/assets/$1" },
+    { "src": "/(.*)\\.(js|css|svg|png|jpg|jpeg|gif|ico|json|txt|map)", "dest": "/$1.$2" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ],
   "env": {
     "VITE_API_BASE_URL": "https://permit-management-backend-2.onrender.com"
